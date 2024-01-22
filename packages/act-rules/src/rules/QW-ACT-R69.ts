@@ -70,7 +70,7 @@ class QW_ACT_R69 extends AtomicRule {
   }
 
   private isCascade(declaredStyle: string, computedStyle: any): boolean {
-    return declaredStyle.includes(computedStyle.value);
+    return declaredStyle.includes(computedStyle?.value);
   }
 
   private findParentWithCSSProperty(element: typeof window.qwElement | null): typeof window.qwElement | null {
