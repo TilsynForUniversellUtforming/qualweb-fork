@@ -15,7 +15,7 @@ describe('URL evaluation', function () {
   it('Evaluates url', async function () {
     this.timeout(0);
 
-    const url = 'https://observatorio.acessibilidade.leadershipbt.com/directories/1';
+    const url = 'https://www.statped.no/laringsressurser/';
     const response = await fetch(url);
     const sourceCode = await response.text();
 
