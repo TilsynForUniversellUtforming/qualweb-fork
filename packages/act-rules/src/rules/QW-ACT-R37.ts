@@ -216,7 +216,7 @@ class QW_ACT_R37 extends AtomicRule {
 
       const parsedFG = this.parseRGBString(fgColor, opacity);
 
-      if (!this.equals(parsedBG, parsedFG)) {
+      if (typeof parsedFG==="object" && !this.equals(parsedBG, parsedFG)) {
         if (this.isHumanLanguage(elementText)) {
           const contrastRatio = this.getContrast(parsedBG, parsedFG);
           const isValid = this.hasValidContrastRatio(contrastRatio, fontSize, this.isBold(fontWeight));

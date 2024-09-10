@@ -10,7 +10,7 @@ module.exports = {
   "ui": "bdd",
 
   // Default spec for files to test.
-  "spec": "test/**/*.spec.ts",
+  //"spec": "test/**/*.spec.ts",
 
   // Use ts-node to compile .spec.ts files on the fly and run them.
   "require": [

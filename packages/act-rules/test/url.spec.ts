@@ -15,7 +15,7 @@ describe('URL evaluation', function () {
   it('Evaluates url', async function () {
     this.timeout(0);
 
-    const url = 'https://www.dgeec.medu.pt/pedidodados';
+    const url = 'https://www.statped.no/fagomrader/';
     const response = await fetch(url);
     const sourceCode = await response.text();
 
