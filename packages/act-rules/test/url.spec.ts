@@ -42,7 +42,7 @@ describe('URL evaluation', function () {
       (fiLocale, enLocale, sourceCode) => {
         // @ts-expect-error: ACTRules will be defined within the puppeteer execution context.
         window.act = new ACTRules({ translate: fiLocale, fallback: enLocale });
-        // window.act.configure({ rules: ['QW-ACT-R36'] });
+        window.act.configure({ rules: ['QW-ACT-R37'] });
         window.act.validateFirstFocusableElementIsLinkToNonRepeatedContent();
 
         const parser = new DOMParser();
