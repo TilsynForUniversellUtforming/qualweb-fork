@@ -30,8 +30,8 @@ class QW_ACT_R37 extends AtomicRule {
     const hasPlaceholder = !!(placeholderAttr && placeholderAttr.trim() !== '');
     if (!hasTextNode && elementText.trim() === '' && !hasPlaceholder) return;
 
-    // If the visible text looks like an icon and there is a different accessible name,
-    // treat it as not human language (out of scope for contrast).
+    // If visible text looks like an icon and accessible name differs,
+    // treat as not human language (out of scope).
     const accName = this.getAccessibleNameOrFallback(element);
     if (
       this.isIconLikeText(elementText) &&
@@ -39,7 +39,7 @@ class QW_ACT_R37 extends AtomicRule {
       accName.trim().toLowerCase() !== elementText.trim().toLowerCase()
     ) {
       const t = new Test();
-      t.verdict = Verdict.PASSED; // out-of-scope (icon-like glyph; accessible name carries meaning)
+      t.verdict = Verdict.PASSED;
       t.resultCode = 'P2';
       t.addElement(element);
       this.addTestResult(t);
@@ -77,14 +77,14 @@ class QW_ACT_R37 extends AtomicRule {
     const textShadow = this.getComputedValue(element, 'text-shadow') || 'none';
 
     // --- Text-shadow halo heuristic (optional pass) ---
-    if (textShadow.trim() !== 'none') {
+    if (textShadow.trim().toLowerCase() !== 'none') {
       const parts = textShadow.split(',');
       for (const raw of parts) {
         const part = raw.trim();
 
-        // Extract a shadow color (named, hex, rgb/rgba)
+        // Extract a shadow color (named, hex, rgb/rgba, hsl/hsla)
         const colorMatch = part.match(
-          /(rgba?\([^)]+\)|#(?:[0-9a-fA-F]{3,8})|\b[a-zA-Z]+\b)/
+          /(rgba?\([^)]+\)|hsla?\([^)]+\)|#(?:[0-9a-fA-F]{3,8})|\b[a-zA-Z]+\b)/
         );
         let shadowColor: any | undefined;
         if (colorMatch) shadowColor = this.parseShadowColorToken(colorMatch[0]);
@@ -103,7 +103,7 @@ class QW_ACT_R37 extends AtomicRule {
           const fgForShadow = this.parseColorWithVars(element, rawFG);
           if (nearlyCentered && fgForShadow) {
             const haloContrast = this.getContrast(shadowColor, fgForShadow);
-            if (this.hasValidContrastRatio(haloContrast, fontSize, this.isBold(fontWeight))) {
+            if (!Number.isNaN(haloContrast) && this.hasValidContrastRatio(haloContrast, fontSize, this.isBold(fontWeight))) {
               const test = new Test();
               test.verdict = Verdict.PASSED;
               test.resultCode = 'P4'; // centered halo improves effective contrast
@@ -115,7 +115,7 @@ class QW_ACT_R37 extends AtomicRule {
         }
       }
 
-      // Compatibility warning for exactly centered small blur
+      // Compatibility warning for exactly centered small blur (legacy behavior)
       const props = textShadow.trim().split(' ');
       if (props.length === 6) {
         const vs = parseInt(props[3], 0);
@@ -158,13 +158,13 @@ class QW_ACT_R37 extends AtomicRule {
 
         // Collect background colors from gradient (transparent → baseBG)
         const stops = this.parseGradientColors(gradientString, element, baseBG);
-        const effectiveBGs = stops.map(c => (c.alpha < 1 ? this.flattenColors(c, baseBG) : c));
+        const effectiveBGs = stops.map(c => (c && c.alpha < 1 ? this.flattenColors(c, baseBG) : c)).filter(Boolean) as any[];
 
         // Highest possible contrast across variants
         let maxContrast = 0;
         for (const bg of effectiveBGs) {
           const cr = this.getContrast(bg, fg);
-          if (cr > maxContrast) maxContrast = cr;
+          if (!Number.isNaN(cr) && cr > maxContrast) maxContrast = cr;
         }
 
         const test = new Test();
@@ -190,7 +190,7 @@ class QW_ACT_R37 extends AtomicRule {
     let elementAux: QWElement = element;
 
     while (
-      parsedBG === undefined ||
+      !parsedBG ||
       (parsedBG.red === 0 && parsedBG.green === 0 && parsedBG.blue === 0 && parsedBG.alpha === 0)
     ) {
       const parent = elementAux.getElementParent();
@@ -203,11 +203,11 @@ class QW_ACT_R37 extends AtomicRule {
         const fg0 = this.parseColorWithVars(element, rawFG) || { red: 0, green: 0, blue: 0, alpha: 1 };
         const fg = { ...fg0, alpha: Math.max(0, Math.min(1, Math.round((fg0.alpha ?? 1) * elementOpacity * 100) / 100)) };
         const stops = this.parseGradientColors(parentGradient, parent, baseBG);
-        const effectiveBGs = stops.map(c => (c.alpha < 1 ? this.flattenColors(c, baseBG) : c));
+        const effectiveBGs = stops.map(c => (c && c.alpha < 1 ? this.flattenColors(c, baseBG) : c)).filter(Boolean) as any[];
         let maxContrast = 0;
         for (const bg of effectiveBGs) {
           const cr = this.getContrast(bg, fg);
-          if (cr > maxContrast) maxContrast = cr;
+          if (!Number.isNaN(cr) && cr > maxContrast) maxContrast = cr;
         }
         const test = new Test();
         const valid = this.hasValidContrastRatio(maxContrast, fontSize, this.isBold(fontWeight));
@@ -224,10 +224,7 @@ class QW_ACT_R37 extends AtomicRule {
     }
 
     // Default to white if still nothing (canvas color)
-    if (
-      parsedBG === undefined ||
-      (parsedBG.red === 0 && parsedBG.green === 0 && parsedBG.blue === 0 && parsedBG.alpha === 0)
-    ) {
+    if (!parsedBG || (parsedBG.red === 0 && parsedBG.green === 0 && parsedBG.blue === 0 && parsedBG.alpha === 0)) {
       parsedBG = { red: 255, green: 255, blue: 255, alpha: 1 };
     }
 
@@ -235,7 +232,7 @@ class QW_ACT_R37 extends AtomicRule {
     let parsedFG = this.parseColorWithVars(element, rawFG);
     if (!parsedFG) parsedFG = this.parseColorWithVars(element, this.getComputedValue(element, 'color') || 'black');
     if (parsedFG && elementOpacity < 1) {
-      parsedFG.alpha = Math.max(0, Math.min(1, Math.round(parsedFG.alpha * elementOpacity * 100) / 100));
+      parsedFG.alpha = Math.max(0, Math.min(1, Math.round((parsedFG.alpha ?? 1) * elementOpacity * 100) / 100));
     }
 
     // Placeholder contrast (if present)
@@ -246,7 +243,7 @@ class QW_ACT_R37 extends AtomicRule {
         if (this.isHumanLikeText(placeholderAttr)) {
           const phTest = new Test();
           const phContrast = this.getContrast(parsedBG, phColor);
-          const phValid = this.hasValidContrastRatio(phContrast, fontSize, this.isBold(fontWeight));
+          const phValid = !Number.isNaN(phContrast) && this.hasValidContrastRatio(phContrast, fontSize, this.isBold(fontWeight));
           phTest.verdict = phValid ? Verdict.PASSED : Verdict.FAILED;
           phTest.resultCode = phValid ? 'P5' : 'F3';
           phTest.addElement(element);
@@ -264,10 +261,39 @@ class QW_ACT_R37 extends AtomicRule {
     }
 
     // Identical fg/bg → not visible → inapplicable (no result)
-    if (parsedFG && this.equals(parsedBG, parsedFG)) return;
+    if (parsedFG && parsedBG && this.equals(parsedBG, parsedFG)) return;
+
+    // --- Worst-case with text-shadow on SOLID background ---
+    // Start from base contrast, but guard against undefined colors.
+    let finalContrastBG =
+      parsedBG && parsedFG ? this.getContrast(parsedBG, parsedFG) : Number.NaN;
+
+    const ts = (textShadow || '').trim().toLowerCase();
+    if (ts && ts !== 'none') {
+      const shadows = this.parseTextShadows(textShadow);
+      const curFG = this.parseColorWithVars(element, this.getComputedValue(element, 'color') || 'black') || parsedFG;
+      for (const sh of shadows) {
+        if (sh.blur > 0) {
+          const dist = Math.hypot(sh.h, sh.v);
+          const couldOverlap = dist <= sh.blur * 1.25 && !(sh.h === 0 && sh.v === 0);
+          if (couldOverlap) {
+            const shadowColor = sh.color || (curFG ? { ...curFG } : undefined);
+            if (shadowColor && parsedFG) {
+              const crShadow = this.getContrast(shadowColor, parsedFG);
+              if (!Number.isNaN(crShadow)) {
+                if (Number.isNaN(finalContrastBG)) finalContrastBG = crShadow;
+                else finalContrastBG = Math.min(finalContrastBG, crShadow);
+              }
+            }
+          }
+        }
+      }
+    }
 
     // Normal text contrast
     const test = new Test();
+
+    // If we still couldn't resolve a foreground color, bail with a warning
     if (!parsedFG) {
       test.verdict = Verdict.WARNING;
       test.resultCode = 'W4'; // unknown/invisible foreground
@@ -277,8 +303,12 @@ class QW_ACT_R37 extends AtomicRule {
     }
 
     if (this.isHumanLikeText(elementText)) {
-      const contrastRatio = this.getContrast(parsedBG, parsedFG);
-      const isValid = this.hasValidContrastRatio(contrastRatio, fontSize, this.isBold(fontWeight));
+      // If contrast is not a number (rare guard), force a fail-safe path by computing once more.
+      let contrastRatio = finalContrastBG;
+      if (Number.isNaN(contrastRatio) && parsedBG) {
+        contrastRatio = this.getContrast(parsedBG, parsedFG);
+      }
+      const isValid = !Number.isNaN(contrastRatio) && this.hasValidContrastRatio(contrastRatio, fontSize, this.isBold(fontWeight));
       test.verdict = isValid ? Verdict.PASSED : Verdict.FAILED;
       test.resultCode = isValid ? 'P1' : 'F1';
       test.addElement(element);
@@ -338,7 +368,6 @@ class QW_ACT_R37 extends AtomicRule {
     for (const token of tokens) {
       const t = token.trim().toLowerCase();
       if (t === 'transparent') {
-        // Treat as fully transparent stop revealing base background
         colors.push({ ...baseBG });
         continue;
       }
@@ -488,11 +517,14 @@ class QW_ACT_R37 extends AtomicRule {
   }
 
   private flattenColors(fgColor: any, bgColor: any): any {
-    const a = fgColor.alpha ?? 1;
-    const red = (1 - a) * bgColor.red + a * fgColor.red;
-    const green = (1 - a) * bgColor.green + a * fgColor.green;
-    const blue = (1 - a) * bgColor.blue + a * fgColor.blue;
-    const alpha = a + bgColor.alpha * (1 - a);
+    if (!fgColor && !bgColor) return { red: 0, green: 0, blue: 0, alpha: 1 };
+    if (!fgColor) return { ...bgColor };
+    if (!bgColor) return { ...fgColor };
+    const a = (fgColor.alpha ?? 1);
+    const red = (1 - a) * (bgColor.red ?? 0) + a * (fgColor.red ?? 0);
+    const green = (1 - a) * (bgColor.green ?? 0) + a * (fgColor.green ?? 0);
+    const blue = (1 - a) * (bgColor.blue ?? 0) + a * (fgColor.blue ?? 0);
+    const alpha = a + (bgColor.alpha ?? 1) * (1 - a);
     return { red, green, blue, alpha };
   }
 
@@ -501,17 +533,28 @@ class QW_ACT_R37 extends AtomicRule {
   }
 
   private getContrast(bgColor: any, fgColor: any): number {
+    if (!bgColor || !fgColor) return Number.NaN;
+
+    // Normalize missing alpha to 1
+    if (fgColor.alpha === undefined) fgColor.alpha = 1;
+    if (bgColor.alpha === undefined) bgColor.alpha = 1;
+
     // If FG has alpha, flatten against BG
-    if ((fgColor.alpha ?? 1) < 1) {
-      fgColor = this.flattenColors(fgColor, bgColor);
-    }
-    const bL = this.getRelativeLuminance(bgColor.red, bgColor.green, bgColor.blue);
-    const fL = this.getRelativeLuminance(fgColor.red, fgColor.green, fgColor.blue);
-    return (Math.max(fL, bL) + 0.05) / (Math.min(fL, bL) + 0.05);
+    const f = (fgColor.alpha ?? 1) < 1 ? this.flattenColors(fgColor, bgColor) : fgColor;
+
+    const bL = this.getRelativeLuminance(bgColor.red ?? 0, bgColor.green ?? 0, bgColor.blue ?? 0);
+    const fL = this.getRelativeLuminance(f.red ?? 0, f.green ?? 0, f.blue ?? 0);
+
+    const high = Math.max(fL, bL);
+    const low = Math.min(fL, bL);
+    if (!isFinite(high) || !isFinite(low)) return Number.NaN;
+
+    return (high + 0.05) / (low + 0.05);
   }
 
   /** Large text uses 3:1, otherwise 4.5:1. */
   private hasValidContrastRatio(contrast: number, fontSize: string, isBold: boolean): boolean {
+    if (Number.isNaN(contrast)) return false;
     const px = this.parseFontPx(fontSize);
     const isSmallFont = (isBold && px < 18.6667) || (!isBold && px < 24);
     const expected = isSmallFont ? 4.5 : 3;
@@ -687,6 +730,24 @@ class QW_ACT_R37 extends AtomicRule {
     if (/^x$/i.test(t)) return true;
 
     return false;
+  }
+
+  /** Parse text-shadow list into objects with color/offsets/blur. */
+  private parseTextShadows(value: string): Array<{color:any|undefined,h:number,v:number,blur:number,raw:string}> {
+    if (!value || value.trim().toLowerCase() === 'none') return [];
+    return value.split(',').map(s => s.trim()).map(raw => {
+      // color (if omitted → currentColor, handled later)
+      const colorToken = raw.match(/(rgba?\([^)]+\)|hsla?\([^)]+\)|#[0-9a-fA-F]{3,8}|\b[a-zA-Z]+\b)/);
+      const color = colorToken ? this.parseShadowColorToken(colorToken[0]) : undefined;
+
+      // numbers (allow unitless zeros)
+      const nums = [...raw.matchAll(/\b(-?\d+(?:\.\d+)?)(?:px)?\b/g)];
+      const h = nums[0] ? parseFloat(nums[0][1]) : 0;
+      const v = nums[1] ? parseFloat(nums[1][1]) : 0;
+      const blur = nums[2] ? parseFloat(nums[2][1]) : (nums.length >= 1 ? parseFloat(nums[nums.length - 1][1]) : 0);
+
+      return { color, h, v, blur, raw };
+    });
   }
 }
 
