@@ -11,7 +11,7 @@ describe('URL evaluation', function () {
   it('Evaluates url', async function () {
     this.timeout(0);
 
-    const url = 'https://observatorio.acessibilidade.leadershipbt.com/directories/1';
+    const url = 'https://www.vitusapotek.no/';
     const response = await fetch(url);
     const sourceCode = await response.text();
 
@@ -39,7 +39,7 @@ describe('URL evaluation', function () {
     try {
       await page.evaluate(function (sourceHtml) {
         // @ts-expect-error - window.act is not declared as a field on window.
-        window.act = new ACTRulesRunner({}, 'fi');
+        window.act = new ACTRulesRunner({}, 'nb');
         // @ts-expect-error - window.act is not declared as a field on window.
         window.act.configure();
         // @ts-expect-error - window.act is not declared as a field on window.
@@ -61,6 +61,13 @@ describe('URL evaluation', function () {
       window.act.testSpecial();
       // @ts-expect-error - window.act is not declared as a field on window.
       return window.act.getReport();
+    });
+
+    console.log(report.assertions["QW-ACT-R37"].metadata);
+
+    report.assertions["QW-ACT-R37"].results.forEach((t: any) => {
+      if (t.verdict === "failed")
+        console.log(t);
     });
 
     expect(report);
